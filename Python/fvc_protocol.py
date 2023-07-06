@@ -1,5 +1,5 @@
 from enum import IntEnum
-from struct import pack, unpack, calcsize
+from struct import pack, unpack
 import numpy as np
 
 server_address = 0
@@ -50,41 +50,6 @@ def crc_calc(data_in: bytes):
         size -= 1
         num += 1
     return crc_out
-
-# def serialize_packet(d_type: data_types._member_names_, dest_addr: int, data: bytes) -> bytes:
-#     packet = pack(">BBB", int(server_address), dest_addr, data_types(d_type).value)
-    
-#     match d_type:
-#         case data_types.TYPE_ID_RESP:
-#             packet += pack(">B", data)
-#         case data_types.TYPE_CLI_DATA:
-#             packet += pack(">H", len(data)) 
-#             packet += pack(">s", data)
-#         case data_types.TYPE_PROGRAM_DATA:
-#             packet += pack(">H", len(data)) 
-#             packet += pack(">s", data)
-#         case data_types.TYPE_PROGRAM_UPDATE_REQUEST:
-#             # packet += pack(">H", len(data)) 
-#             packet += pack(">s", data)
-#         case other:
-#             pass
-    
-#     packet = packet + pack(">B", crc_calc(packet))
-#     return packet
-
-# def deserialzie_packet(package):
-#     if crc_calc(package) != 0:
-#         return
-    
-#     data_len = len(package) - 4
-#     if data_len > 0:
-#         data = unpack(">BBBH"+ str(data_len - 2) +"sB", package)
-#         (src_ID, dest_ID, data_t, payload_len, payload, crc) = data
-#     else:
-#         data = unpack(">BBBB", package)
-#         (src_ID, dest_ID, data_t, crc) = data
-        
-#     return data
 
 def serialize_packet(d_type: data_types._member_names_, dest_addr: int, data: bytes) -> bytes:
     packet = pack(">BHBBB", sfd, 7 + len(data), int(server_address), dest_addr, data_types(d_type).value)

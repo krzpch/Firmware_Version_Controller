@@ -5,7 +5,7 @@ import time
 import signal
 
 import fvc_protocol
-from struct import pack, unpack
+from struct import pack
 
 from fvc_hash import hash_calc
 from usart_process import SerialProcess
@@ -40,7 +40,6 @@ def parseData(rxQueue: Queue, endEvent: Event):
 
 def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu: Queue, endEvent: Event):
     timer_start = time.time_ns()
-    update_in_pogress = False
     state = 0
     update_status = False
     retransfers_counter = 0
