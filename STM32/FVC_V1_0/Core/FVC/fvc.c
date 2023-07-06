@@ -34,6 +34,11 @@ enum board_status
 //#define MAX_PROGRAM_DATA_LEN	256 // data
 
 #define CFG_IGNORE_BACKUP		0
+#define CFG_IGNORE_PROGRAM_HASH	0
+
+#if !CFG_IGNORE_PROGRAM_HASH
+static uint8_t hmac_sha256_key[] = {0x73, 0x65, 0x63, 0x72, 0x65, 0x74, 0x5f, 0x6b, 0x65, 0x79};
+#endif
 
 // ------------------------------------------------
 // structures and unions
@@ -224,6 +229,11 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 	uint8_t validation_data[256] = {0};
 	size_t program_data_len = 0;
 
+#if !CFG_IGNORE_PROGRAM_HASH
+	uint8_t calc_program_hmac_sha256[32] = {0};
+	fvc_calc_hmac_sha256_init(hmac_sha256_key, sizeof(hmac_sha256_key));
+#endif
+
 	uint8_t retry_counter = 0;
 
 	uint32_t new_firmware_id = ((((uint32_t) frame->payload_ptr[0]) << 24)
@@ -236,15 +246,12 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 			| (((uint32_t) frame->payload_ptr[6]) << 8)
 			| ((uint32_t) frame->payload_ptr[7]));
 
-	uint32_t program_crc = ((((uint32_t) frame->payload_ptr[8]) << 24)
-			| (((uint32_t) frame->payload_ptr[9]) << 16)
-			| (((uint32_t) frame->payload_ptr[10]) << 8)
-			| ((uint32_t) frame->payload_ptr[11]));
+	uint8_t program_hmac_sha256[32] = {0};
+	memcpy(program_hmac_sha256, &frame->payload_ptr[8], 32);
 
 	uint32_t prog_len = 0;
 	uint32_t prog_hash = 0xFFFFFFFF;
 
-	UNUSED(program_crc);
 	UNUSED(new_firmware_id);
 
 	bsp_interface_abort_receive_IT();
@@ -304,6 +311,10 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 			prog_len += program_data_len;
 			prog_hash = fvc_calc_crc(prog_hash, program_data, program_data_len);
 
+#if !CFG_IGNORE_PROGRAM_HASH
+			fvc_calc_hmac_sha256_write_data(program_data, program_data_len);
+#endif
+
 			if ((program_data_len % 256) != 0)
 			{
 				memset(&program_data[program_data_len], 0xFF, MAX_PROGRAM_DATA_LEN - program_data_len);
@@ -338,7 +349,6 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 			retry_counter++;
 			debug_transmit("Failed to receive packet %d\n\r", counter);
 
-
 			send_response(false);
 
 			if(retry_counter > 3)
@@ -349,6 +359,12 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 		}
 	}
 
+#if !CFG_IGNORE_PROGRAM_HASH
+	fvc_calc_hmac_sha256_end_calc(calc_program_hmac_sha256);
+	if (memcmp(calc_program_hmac_sha256, program_hmac_sha256, 32) == 0) 
+	{
+#endif
+
 	jmp_to_app(APP_ADDR);
 	ctx.status = STATUS_OK;
 
@@ -357,6 +373,15 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 	fvc_eeprom_write(EEPROM_PROGRAM_HASH, prog_hash);
 
 	debug_transmit("Update finished\n\r");
+
+#if !CFG_IGNORE_PROGRAM_HASH
+	}
+	else
+	{
+		ctx.status = STATUS_PROGRAM_INVALID;
+		debug_transmit("Program hash is incorrect!\n\r");
+	}
+#endif
 
 	return;
 }

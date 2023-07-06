@@ -216,4 +216,3 @@ bool send_response(bool response)
 	}
 	return status;
 }
-

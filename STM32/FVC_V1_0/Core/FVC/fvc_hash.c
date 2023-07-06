@@ -1,4 +1,8 @@
 #include "fvc_hash.h"
+#include "SHA256/sha-256.h"
+
+#define OPAD_VAL 0x5c
+#define IPAD_VAL 0x36
 
 static uint32_t crc32_table[] =
 {
@@ -79,6 +83,94 @@ uint32_t fvc_calc_crc(uint32_t hash_in, uint8_t *data, size_t data_len)
 	return crc;
 }
 
+void fvc_calc_hmac_sha256(uint8_t *data, size_t data_len, uint8_t *key, size_t key_len, uint8_t *hash_out)
+{
+  uint8_t inner_hash_out[32] = {0};
+  struct Sha_256 sha_256;
 
+  uint8_t inner_hashing_block[64] = {0};
+  uint8_t outer_hashing_block[64] = {0};
 
+  if (key_len > 64)
+  {
+    calc_sha_256(inner_hashing_block, (void*) key, key_len);
 
+    memcpy(outer_hashing_block, inner_hashing_block, 32);
+  }
+  else
+  {
+    memcpy(inner_hashing_block, key, key_len);
+    memcpy(outer_hashing_block, key, key_len);
+  }
+
+  for(uint8_t i = 0; i < 64; i++)
+  {
+    inner_hashing_block[i] = outer_hashing_block[i] ^ IPAD_VAL;
+    outer_hashing_block[i] = outer_hashing_block[i] ^ OPAD_VAL;
+  }
+
+  sha_256_init(&sha_256, inner_hash_out);
+  sha_256_write(&sha_256, (void*) inner_hashing_block, 64);
+  sha_256_write(&sha_256, (void*) data, data_len);
+  sha_256_close(&sha_256);
+
+  sha_256_init(&sha_256, hash_out);
+  sha_256_write(&sha_256, (void*) outer_hashing_block, 64);
+  sha_256_write(&sha_256, (void*) inner_hash_out, 32);
+  sha_256_close(&sha_256);
+
+  memset(inner_hash_out, 0, 32);
+  memset(inner_hashing_block, 0, 64);
+  memset(outer_hashing_block, 0, 64);
+}
+
+// ------------------------------------------------------------------------------
+
+static struct Sha_256 _sha_struct; 
+static uint8_t _inner_hash_out[32] = {0};
+
+static uint8_t _inner_hashing_block[64] = {0};
+static uint8_t _outer_hashing_block[64] = {0};
+
+void fvc_calc_hmac_sha256_init(uint8_t *key, size_t key_len)
+{
+  if (key_len > 64)
+  {
+    calc_sha_256(_inner_hashing_block, (void*) key, key_len);
+
+    memcpy(_outer_hashing_block, _inner_hashing_block, 32);
+  }
+  else
+  {
+    memcpy(_inner_hashing_block, key, key_len);
+    memcpy(_outer_hashing_block, key, key_len);
+  }
+
+  for(uint8_t i = 0; i < 64; i++)
+  {
+    _inner_hashing_block[i] = _outer_hashing_block[i] ^ IPAD_VAL;
+    _outer_hashing_block[i] = _outer_hashing_block[i] ^ OPAD_VAL;
+  }
+
+  sha_256_init(&_sha_struct, _inner_hash_out);
+  sha_256_write(&_sha_struct, (void*) _inner_hashing_block, 64);
+}
+
+void fvc_calc_hmac_sha256_write_data(uint8_t *data, size_t data_len)
+{
+  sha_256_write(&_sha_struct, (void*) data, data_len);
+}
+
+void fvc_calc_hmac_sha256_end_calc(uint8_t *hash_out)
+{
+  sha_256_close(&_sha_struct);
+
+  sha_256_init(&_sha_struct, hash_out);
+  sha_256_write(&_sha_struct, (void*) _outer_hashing_block, 64);
+  sha_256_write(&_sha_struct, (void*) _inner_hash_out, 32);
+  sha_256_close(&_sha_struct);
+
+  memset(_inner_hash_out, 0, 32);
+  memset(_inner_hashing_block, 0, 64);
+  memset(_outer_hashing_block, 0, 64);
+}

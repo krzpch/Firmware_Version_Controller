@@ -7,7 +7,7 @@ import signal
 import fvc_protocol
 from struct import pack
 
-from fvc_hash import hash_calc
+from fvc_hash import hmac_calc
 from usart_process import SerialProcess
 
 _port = "COM6"
@@ -15,6 +15,8 @@ _baudrate = 115200
 
 _timeout_value_ns = 5*pow(10,6) # 5 s
 _max_retransfers = 5
+
+_hmac_key = b'secret_key'
 
 max_data_size = 2*1024
 
@@ -45,20 +47,20 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
     retransfers_counter = 0
     
     program_packet = None
-    pogram_crc = None
+    hmac_sha = None
     packet_count = None
     
     with open(programPath, "rb") as file:
         data_size = os.path.getsize(programPath)
         program_data = file.read(data_size)
         packet_count = calc_packet_quantity(data_size)
-        pogram_crc = hash_calc(program_data)
+        hmac_sha = hmac_calc(program_data, _hmac_key)
         
     with open(programPath, "rb") as file:
         while not endEvent.is_set():
             match state:
                 case 0: # Update request
-                    data = fvc_protocol.serialize_packet(fvc_protocol.data_types.TYPE_PROGRAM_UPDATE_REQUEST, int(id), pack(">LLL", 1, packet_count, pogram_crc))
+                    data = fvc_protocol.serialize_packet(fvc_protocol.data_types.TYPE_PROGRAM_UPDATE_REQUEST, int(id), pack(">LL32s", 1, packet_count, hmac_sha))
                     txQueue.put(data)
                     
                     data = parseData(rxQueueu, endEvent)
