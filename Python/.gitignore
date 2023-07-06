@@ -1,0 +1,7 @@
+# ignore
+*.txt
+*.bin
+TODOs.md
+
+/.vscode
+/__pycache__
