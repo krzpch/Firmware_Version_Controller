@@ -188,7 +188,7 @@ static int test(const uint8_t *input, size_t input_len, const char output[])
 	}
 }
 
-int main(void)
+int sha256_test(void)
 {
 	size_t i;
 	for (i = 0; i < (sizeof STRING_VECTORS / sizeof(struct string_vector)); i++) {
