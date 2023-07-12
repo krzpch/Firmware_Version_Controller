@@ -29,7 +29,7 @@ enum board_status
 #define ERASED_MEMORY_VALUE		0xFF
 
 #define CLI_BUFFOR_LEN			256
-#define DATA_OVERHEAD			6	// src_ID, dst_ID, , packet type, data_len, crc
+#define DATA_OVERHEAD			7	// sfd, packet len, src_ID, dst_ID, packet type,, crc
 #define MAX_PROGRAM_DATA_LEN	(2*1024) // data
 //#define MAX_PROGRAM_DATA_LEN	256 // data
 
@@ -197,8 +197,8 @@ static size_t _receive_and_deserialize_program_frame(uint8_t * data_out)
 	struct protocol_frame packet;
 	packet.payload_ptr = data_out;
 
-	if (bsp_interface_receive(data, MAX_PROGRAM_DATA_LEN + DATA_OVERHEAD)) {
-		if (frame_deserialize(&packet, data, MAX_PROGRAM_DATA_LEN + DATA_OVERHEAD)) {
+	if (bsp_interface_receive(data, sizeof(data))) {
+		if (frame_deserialize(&packet, data, sizeof(data))) {
 			if ((packet.destination_id == ctx.board_id) && (packet.data_type == TYPE_PROGRAM_DATA)) {
 				return packet.payload_len;
 			}
@@ -270,21 +270,28 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 	}
 
 #if !CFG_IGNORE_BACKUP
-	debug_transmit("Validating current backup\n\r");
-
-	if (!validate_current_backup())
+	if (ctx.status == STATUS_OK) 
 	{
-		debug_transmit("Creating new backup\n\r");
-		if (!create_firmware_backup())
+		debug_transmit("Validating current backup\n\r");
+
+		if (!validate_current_backup())
 		{
-			debug_transmit("Failed to create program backup\n\r");
-			send_response(false);
-			return;
+			debug_transmit("Creating new backup\n\r");
+			if (!create_firmware_backup())
+			{
+				debug_transmit("Failed to create program backup\n\r");
+				send_response(false);
+				return;
+			} else {
+				debug_transmit("Backup has been created\n\r");
+			}
 		} else {
-			debug_transmit("Backup has been created\n\r");
+			debug_transmit("Current backup is valid\n\r");
 		}
-	} else {
-		debug_transmit("Current backup is valid\n\r");
+	}
+	else
+	{
+		debug_transmit("Current program invalid. Backup won't be created\n\r");
 	}
 #endif
 
@@ -355,7 +362,6 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 			{
 				return;
 			}
-
 		}
 	}
 
@@ -440,7 +446,6 @@ static bool _default_board_init(void)
 
 bool fvc_main(void)
 {
-
 	bsp_initi_gpio();
 	bsp_interface_init(_interface_callback_handler);
 
@@ -455,8 +460,8 @@ bool fvc_main(void)
 		return false;
 	}
 
-	fvc_eeprom_write(EEPROM_ID_ADDR, 69);
-	fvc_eeprom_write(EEPROM_CONFIG, 2);
+	fvc_eeprom_write(EEPROM_ID_ADDR, 1);
+	fvc_eeprom_write(EEPROM_CONFIG, 3);
 
 	_get_board_info();
 

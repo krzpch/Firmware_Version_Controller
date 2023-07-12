@@ -84,12 +84,11 @@ def deserialzie_packet(package: bytes):
     return data
 
 def get_packet_len(initial_bytes: bytes) -> int:  
-    data = unpack(">BHB", initial_bytes)
+    data = unpack(">BH", initial_bytes)
+    if data[0] != int(sfd):
+        return None
     
-    if data[0] != sfd:
-        return -1
-    
-    return data[1] - 4
+    return data[1] - 3
 
 
 
