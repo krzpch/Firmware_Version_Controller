@@ -78,14 +78,17 @@ bool validate_current_backup(void)
 		{
 			read_len = 256;
 		}
-
+		
 		if (W25Q_ReadRaw(flash_data, 256, ext_flash_addr) == W25Q_OK)
 		{
 			calc_hash = fvc_calc_crc(calc_hash, flash_data, read_len);
 			ext_flash_addr += read_len;
 		}
 
-		HAL_Delay(5);
+		if (W25Q_IsBusy() == W25Q_BUSY)
+		{
+			HAL_Delay(5);
+		}
 	}
 
 	return prog_hash == calc_hash;

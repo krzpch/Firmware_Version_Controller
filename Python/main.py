@@ -232,8 +232,5 @@ def main(paralelUpdateEn: bool):
     # print statistics about update
     print("Update statistics")
     
-    # closing manager
-    managerHandle.close()
-    
 if __name__ == "__main__":
     main(False)
