@@ -13,7 +13,7 @@ from usart_process import SerialProcess
 _port = "COM6"
 _baudrate = 115200
 
-_timeout_value_ns = 20*pow(10,9) # 20 s
+_timeout_value_ns = 240*pow(10,9) # 120 s
 _max_retransfers = 5
 
 _hmac_key = b'secret_key'
@@ -142,7 +142,7 @@ def handleCli(txQueue: Queue, rxQueue: Queue, endEvent: Event):
     while not endEvent.is_set():
         data = input()
         if data == 'end':
-            endEvent.set()
+            return
         else:
             # print("[CLI]: ", data)
             pass
@@ -177,7 +177,6 @@ def main(paralelUpdateEn: bool):
         for line in lines:
             if int(line) > 0:
                 boards_to_update.append(line)
-                print("Added ID:", line)
             else:
                 print("Cannot add ID: 0")
     

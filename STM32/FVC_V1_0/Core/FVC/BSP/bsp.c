@@ -20,12 +20,6 @@ bool bsp_initi_gpio(void)
 	HAL_GPIO_WritePin(PROC_BOOT0_GPIO_Port, PROC_BOOT0_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(PROC_RESET_GPIO_Port, PROC_RESET_Pin, GPIO_PIN_RESET);
 
-	for (uint8_t i = 0; i < 4; i++)
-	{
-		HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-		HAL_Delay(500);
-	}
-
 	return true;
 }
 
@@ -39,6 +33,12 @@ bool bsp_boot0_gpio_controll(enum gpio_state state)
 bool bsp_reset_gpio_controll(enum gpio_state state)
 {
 	HAL_GPIO_WritePin(PROC_RESET_GPIO_Port, PROC_RESET_Pin, (GPIO_PinState) state);
+	return true;
+}
+
+bool bsp_led_gpio_controll(enum gpio_state state)
+{
+	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, (GPIO_PinState) state);
 	return true;
 }
 

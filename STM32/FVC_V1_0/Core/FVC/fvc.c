@@ -4,6 +4,7 @@
 #include "fvc_eeprom.h"
 #include "fvc_hash.h"
 #include "fvc_backup_management.h"
+#include "fvc_led.h"
 
 #include "STM32_SPI_Bootloader/stm32_spi_bootloader.h"
 #include "W25Q_Driver/Library/w25q_mem.h"
@@ -447,16 +448,13 @@ static bool _default_board_init(void)
 bool fvc_main(void)
 {
 	bsp_initi_gpio();
+	fvc_led_program_init();
+
 	bsp_interface_init(_interface_callback_handler);
 
 	if (!fvc_eeprom_initialize())
 	{
 		// TODO: write eeprom failure handler
-		return false;
-	}
-
-	if(W25Q_Init() != W25Q_OK)
-	{
 		return false;
 	}
 
@@ -467,6 +465,28 @@ bool fvc_main(void)
 
 	debug_transmit("FVC Init\n\r");
 
+	if(W25Q_Init() != W25Q_OK)
+	{
+		return false;
+	}
+
+	// Test
+	W25Q_STATE state;
+
+	state = W25Q_EraseSector(0);
+
+	W25Q_STATUS_REG status = {0};
+
+	state = W25Q_ReadStatusStruct(&status);
+
+	state = W25Q_ProgramByte(69,0,0);
+
+	uint8_t temp_buff = 0;
+
+	state = W25Q_ReadByte(&temp_buff,0,0);
+
+	// Test end
+
 	if (!_default_board_init())
 	{
 		debug_transmit("WARNING: program could not be started\n\r");
@@ -476,6 +496,8 @@ bool fvc_main(void)
 	while(1)
 	{
 		_process_msg();
+ 
+		fvc_led_cli_blink();
 	}
 
 	return true;
