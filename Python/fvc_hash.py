@@ -1,3 +1,4 @@
+import hmac
 
-def hash_calc(data: bytes) -> int:
-    return 0
+def hmac_calc(data: bytes, key: bytes) -> bytes:
+    return hmac.new(key,data,'sha256').digest()

@@ -5,23 +5,23 @@ from fvc_protocol import get_packet_len, serialize_packet, deserialzie_packet, d
 
 import time
 
-def SerialProcess(tx_queue: Queue, rx_queue: Queue, stop_event: Event, _port: str, _baudrate: int):   
-    ser = Serial(port=_port, baudrate=_baudrate, timeout=0.1)
+def SerialProcess(tx_queue: Queue, rx_queue: Queue, stop_event: Event, _port: str, _baudrate: int): 
+    ser = Serial(port=_port, baudrate=_baudrate)
     if not ser.is_open:
         ser.open()
         
     while ser.is_open and not stop_event.is_set():
-        if not rx_queue.full():
-            data = ser.read(4)
-            if len(data) == 4:
+        if not rx_queue.full() and ser.in_waiting > 2:
+            data = ser.read(3)
+            if len(data) == 3:
                 data_len_to_read = get_packet_len(data)
-                if data_len_to_read != -1:
+                if data_len_to_read != None:
                     data += ser.read(data_len_to_read)
                     rx_queue.put(data, block=True, timeout=0.1)
                     
         if not tx_queue.empty():
             ser.write(tx_queue.get(block=True, timeout=0.1))
-    
+
     ser.close()
 
 

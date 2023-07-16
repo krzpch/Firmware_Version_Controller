@@ -16,8 +16,14 @@ struct fvc_protocol_ctx
 
 static struct fvc_protocol_ctx ctx;
 
-#define MAX_CLI_MSG		256
-#define PACKET_OVERHEAD 4
+#define MAX_CLI_MSG			256
+
+#define SFD_VALUE			0xAB
+
+#define PACKET_CONST_LEN	7			// SFD (1B), PACKET_LEN (2B), SRC_ID (1B), DST_ID (1B), DATA_TYPE (1B), CRC (1B)
+#define MAX_PAYLOAD_LEN 	(65536 - PACKET_CONST_LEN)	// max value of data len to fit in uint16_t variable
+
+#define PROTOCOL_VERSION	2
 
 /**
  * Table with calculated crc table.
@@ -59,6 +65,63 @@ static uint8_t _calculate_hash(uint8_t *data, size_t data_len)
 	return crc;
 }
 
+void fvc_protocol_init(uint8_t board_id, uint8_t debug_conf)
+{
+	ctx.board_id = board_id;
+	ctx.debug_conf = debug_conf;
+}
+
+bool debug_transmit(const char* format, ...)
+{
+
+	bool status = false;
+	uint8_t temp_buff[MAX_CLI_MSG] = {0};
+	uint8_t serialized_packet[MAX_CLI_MSG + PACKET_CONST_LEN] = {0};
+	struct protocol_frame frame = {
+			.source_id = ctx.board_id,
+			.destination_id = 0,
+			.data_type = TYPE_CLI_DATA,
+			.payload_ptr = temp_buff
+	};
+	va_list ap;
+	va_start(ap, format);
+	size_t len = vsnprintf((char*)temp_buff, MAX_CLI_MSG, (const char*)format, ap);\
+	if(len == 0)
+		return status;
+
+	if (IS_INTERFACE_DEBUG_ENABLED(ctx.debug_conf))
+		status = bsp_debug_interface_transmit((uint8_t *)temp_buff, len);
+
+	if (IS_PROTOCOL_DEBUG_ENABLED(ctx.debug_conf))
+	{
+		frame.payload_len = len;
+		len = frame_serialize(&frame,(uint8_t *) serialized_packet, MAX_CLI_MSG + PACKET_CONST_LEN);
+		status &= bsp_interface_transmit((uint8_t *)serialized_packet, len);
+	}
+
+	va_end(ap);
+	return status;
+}
+
+bool send_response(bool response)
+{
+	bool status = false;
+	uint8_t serialized_packet[MAX_CLI_MSG + PACKET_CONST_LEN] = {0};
+	struct protocol_frame frame = {
+			.source_id = ctx.board_id,
+			.destination_id = 0,
+	};
+	frame.data_type = response ? TYPE_ACK : TYPE_NACK;
+
+	size_t len = frame_serialize(&frame,(uint8_t *) serialized_packet, MAX_CLI_MSG + PACKET_CONST_LEN);
+	if (len > 0) {
+		status = bsp_interface_transmit((uint8_t *)serialized_packet, len);
+	}
+	return status;
+}
+
+#if PROTOCOL_VERSION == 1
+
 static size_t _calculate_packet_len(struct protocol_frame * structure)
 {
 	size_t packet_len = PROTOCOL_COMMON_LEN + PROTOCOL_HASH_LEN;
@@ -78,12 +141,6 @@ static size_t _calculate_packet_len(struct protocol_frame * structure)
 	}
 
 	return packet_len;
-}
-
-void fvc_protocol_init(uint8_t board_id, uint8_t debug_conf)
-{
-	ctx.board_id = board_id;
-	ctx.debug_conf = debug_conf;
 }
 
 size_t frame_serialize (struct protocol_frame * structure, uint8_t * packet, size_t max_packet_len)
@@ -168,52 +225,96 @@ bool frame_deserialize (struct protocol_frame * structure, uint8_t * packet, siz
 	return true;
 }
 
-bool debug_transmit(const char* format, ...)
+#elif PROTOCOL_VERSION == 2
+
+// --------------------------------------------------------------------
+// Version 2
+// SFD, PACKET_LEN, SRC_ID, DST_ID, DATA_TYPE, DATA, CRC 
+
+static size_t _calculate_packet_len(struct protocol_frame * structure)
 {
+	size_t packet_len = PACKET_CONST_LEN;
 
-	bool status = false;
-	uint8_t temp_buff[MAX_CLI_MSG] = {0};
-	uint8_t serialized_packet[MAX_CLI_MSG + PACKET_OVERHEAD] = {0};
-	struct protocol_frame frame = {
-			.source_id = ctx.board_id,
-			.destination_id = 0,
-			.data_type = TYPE_CLI_DATA,
-			.payload_ptr = temp_buff
-	};
-	va_list ap;
-	va_start(ap, format);
-	size_t len = vsnprintf((char*)temp_buff, MAX_CLI_MSG, (const char*)format, ap);\
-	if(len == 0)
-		return status;
+	switch (structure->data_type) {
+		case TYPE_CLI_DATA:
+		case TYPE_PROGRAM_DATA:
+			packet_len += (structure->payload_len);
 
-	if (IS_INTERFACE_DEBUG_ENABLED(ctx.debug_conf))
-		status = bsp_debug_interface_transmit((uint8_t *)temp_buff, len);
-
-	if (IS_PROTOCOL_DEBUG_ENABLED(ctx.debug_conf))
-	{
-		frame.payload_len = len;
-		len = frame_serialize(&frame,(uint8_t *) serialized_packet, MAX_CLI_MSG + PACKET_OVERHEAD);
-		status &= bsp_interface_transmit((uint8_t *)serialized_packet, len);
+		case TYPE_PROGRAM_UPDATE_REQUEST:
+			packet_len += 12;
+			break;
+		default:
+			break;
 	}
 
-	va_end(ap);
-	return status;
+	return packet_len;
 }
 
-bool send_response(bool response)
+size_t frame_serialize (struct protocol_frame * structure, uint8_t * packet, size_t max_packet_len)
 {
-	bool status = false;
-	uint8_t serialized_packet[MAX_CLI_MSG + PACKET_OVERHEAD] = {0};
-	struct protocol_frame frame = {
-			.source_id = ctx.board_id,
-			.destination_id = 0,
-	};
-	frame.data_type = response ? TYPE_ACK : TYPE_NACK;
-
-	size_t len = frame_serialize(&frame,(uint8_t *) serialized_packet, MAX_CLI_MSG + PACKET_OVERHEAD);
-	if (len > 0) {
-		status = bsp_interface_transmit((uint8_t *)serialized_packet, len);
+	if ((structure == NULL) || (packet == NULL) || (structure->payload_len > MAX_PAYLOAD_LEN) || (max_packet_len < _calculate_packet_len(structure))) {
+		return 0;
 	}
-	return status;
+
+	size_t iterator = PACKET_CONST_LEN - 1;
+	uint16_t packet_len = structure->payload_len + PACKET_CONST_LEN;
+
+	packet[0] = SFD_VALUE;
+	packet[1] = (uint8_t) (packet_len >> 8);
+	packet[2] = (uint8_t) (packet_len);
+	packet[3] = structure->source_id;
+	packet[4] = structure->destination_id;
+	packet[5] = (uint8_t) structure->data_type;
+
+	switch (structure->data_type) {
+		case TYPE_ID_RESP:
+		case TYPE_PROGRAM_DATA:
+		case TYPE_CLI_DATA:
+			memcpy(&packet[iterator], structure->payload_ptr, structure->payload_len);
+			iterator += structure->payload_len;
+			break;
+		default:
+			break;
+	}
+
+	packet[iterator] = _calculate_hash(packet, iterator);
+
+	return packet_len;
 }
 
+bool frame_deserialize (struct protocol_frame * structure, uint8_t * packet, size_t max_packet_len)
+{
+	if ((structure == NULL) || (packet == NULL) || (max_packet_len == 0) || (packet[0] != SFD_VALUE)) {
+		return false;
+	}
+
+	size_t packet_len = ((((uint16_t) packet[1]) << 8) | ((uint16_t) packet[2]));
+	uint8_t calculated_hash = 0;
+
+	structure->payload_len = packet_len - PACKET_CONST_LEN;
+
+	structure->source_id = packet[3];
+	structure->destination_id = packet[4];
+	structure->data_type = (enum payload_type) packet[5];
+
+	switch (structure->data_type) {
+		case TYPE_ID_RESP:
+		case TYPE_PROGRAM_UPDATE_REQUEST:
+		case TYPE_PROGRAM_DATA:
+		case TYPE_CLI_DATA:
+			memcpy(structure->payload_ptr, &packet[6], structure->payload_len);
+			break;
+		default:
+			break;
+	}
+
+	calculated_hash = _calculate_hash(packet, packet_len);
+
+	if (calculated_hash != 0x00) {
+		return false;
+	}
+
+	return true;
+}
+
+#endif
