@@ -93,6 +93,9 @@ W25Q_STATE W25Q_Init(void);		///< Initalize function
 W25Q_STATE W25Q_EnableVolatileSR(void);						 ///< Make Status Register Volatile
 W25Q_STATE W25Q_ReadStatusReg(u8_t *reg_data, u8_t reg_num); ///< Read status register to variable
 W25Q_STATE W25Q_WriteStatusReg(u8_t reg_data, u8_t reg_num);///< Write status register from variable
+
+W25Q_STATE W25Q_WriteStatusRegs(u8_t *reg_data);
+
 W25Q_STATE W25Q_ReadStatusStruct(W25Q_STATUS_REG *status);	 ///< Read all status registers to struct
 W25Q_STATE W25Q_IsBusy(void);	///< Check chip's busy status
 

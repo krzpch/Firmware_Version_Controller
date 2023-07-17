@@ -252,6 +252,50 @@ W25Q_STATE W25Q_WriteStatusReg(u8_t reg_data, u8_t reg_num) {
 	return W25Q_OK;
 }
 
+W25Q_STATE W25Q_WriteStatusRegs(u8_t *reg_data)
+{
+	while (W25Q_IsBusy() == W25Q_BUSY)
+		w25q_delay(1);
+
+	W25Q_STATE state = W25Q_WriteEnable(1);
+	if (state != W25Q_OK)
+		return state;
+
+	QSPI_CommandTypeDef com;
+
+	com.InstructionMode = QSPI_INSTRUCTION_1_LINE; // QSPI_INSTRUCTION_...
+
+
+	com.Instruction = W25Q_WRITE_SR1;
+
+	com.AddressMode = QSPI_ADDRESS_NONE;
+	com.AddressSize = QSPI_ADDRESS_NONE;
+	com.Address = 0x0U;
+
+	com.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE;
+	com.AlternateBytes = QSPI_ALTERNATE_BYTES_NONE;
+	com.AlternateBytesSize = QSPI_ALTERNATE_BYTES_NONE;
+
+	com.DummyCycles = 0;
+	com.DataMode = QSPI_DATA_1_LINE;
+	com.NbData = 2;
+
+	com.DdrMode = QSPI_DDR_MODE_DISABLE;
+	com.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
+	com.SIOOMode = QSPI_SIOO_INST_EVERY_CMD;
+
+	if (HAL_QSPI_Command(&hqspi1, &com, HAL_QSPI_TIMEOUT_DEFAULT_VALUE)
+			!= HAL_OK) {
+		return W25Q_SPI_ERR;
+	}
+	if (HAL_QSPI_Transmit(&hqspi1, reg_data, HAL_QSPI_TIMEOUT_DEFAULT_VALUE)
+			!= HAL_OK) {
+		return W25Q_SPI_ERR;
+	}
+
+	return W25Q_OK;
+}
+
 /**
  * @brief W25Q Read Status Registers
  * Read all status registers to struct
@@ -491,7 +535,7 @@ W25Q_STATE W25Q_ReadRaw(u8_t *buf, u16_t data_len, u32_t rawAddr) {
 #else
 		com.Instruction = W25Q_FAST_READ_QUAD_IO;	 // Command
 		com.AddressSize = QSPI_ADDRESS_24_BITS;
-	#endif
+#endif
 	com.AddressMode = QSPI_ADDRESS_4_LINES;
 
 	com.Address = rawAddr;
