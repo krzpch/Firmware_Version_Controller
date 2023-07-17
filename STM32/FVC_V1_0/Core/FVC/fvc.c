@@ -221,10 +221,21 @@ static bool _compare_data(uint8_t *data1, uint8_t *data2, size_t data_len)
 	return true;
 }
 
+static bool _handle_update_data(uint32_t packet_count)
+{
+	bool update_succesfull = false;
+
+
+
+
+
+	return update_succesfull;
+}
+
 static void _handle_update_program_request(struct protocol_frame *frame)
 {
 	debug_transmit("Updating board\n\r");
-
+	
 	uint32_t memory_addr = APP_ADDR;
 	uint8_t program_data[MAX_PROGRAM_DATA_LEN] = {0};
 	uint8_t validation_data[256] = {0};
@@ -347,7 +358,6 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 				} else {
 					jmp_to_bootloader();
 				}
-//				HAL_Delay(100);
 			}
 			counter++;
 			send_response(true);
@@ -470,22 +480,12 @@ bool fvc_main(void)
 		return false;
 	}
 
-	// Test
-	W25Q_STATE state;
-
-	state = W25Q_EraseSector(0);
-
-	W25Q_STATUS_REG status = {0};
-
-	state = W25Q_ReadStatusStruct(&status);
-
-	state = W25Q_ProgramByte(69,0,0);
-
-	uint8_t temp_buff = 0;
-
-	state = W25Q_ReadByte(&temp_buff,0,0);
-
-	// Test end
+	// Enable QSPI for FLASH ext memory
+	uint8_t buf[2] = {0};
+	W25Q_ReadStatusReg(&buf[0], 1);
+	W25Q_ReadStatusReg(&buf[1], 2);
+	buf[1] |= (1<<1);
+	W25Q_WriteStatusRegs(buf);
 
 	if (!_default_board_init())
 	{
