@@ -7,11 +7,15 @@ server_address = 0
 class data_types(IntEnum):
     TYPE_NACK   = 0
     TYPE_ACK    = 1
-    TYPE_ID_REQ = 2
-    TYPE_ID_RESP = 3
-    TYPE_CLI_DATA = 4
-    TYPE_PROGRAM_UPDATE_REQUEST = 5
-    TYPE_PROGRAM_DATA = 6
+    TYPE_FATAL_ERROR = 2
+    TYPE_ID_REQ = 3
+    TYPE_ID_RESP = 4
+    TYPE_CLI_DATA = 5
+    TYPE_PROGRAM_UPDATE_REQUEST = 6
+    TYPE_PROGRAM_DATA = 7
+    TYPE_PROGRAM_UPDATE_FINISHED = 8
+    TYPE_EEPROM_DATA_READ = 9
+    TYPE_EEPROM_DATA_WRITE = 10
     
 starting_crc_value = 0xff
 

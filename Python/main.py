@@ -72,6 +72,7 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                         program_packet = fvc_protocol.serialize_packet(fvc_protocol.data_types.TYPE_PROGRAM_DATA, int(boardID), program_data)
                         state = 2
                     else: # finish update if there is no more data to be send
+                        print("All packets have been transmitted for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
                         update_status = True
                         endEvent.set()
 
@@ -89,11 +90,14 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                             endEvent.set()
                     else:
                         endEvent.set()
-            
+    
     if update_status:
-        print("Update finished for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
-    else:
-        print("Update failed for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
+        data = parseData(rxQueueu, endEvent)
+        if data != None and data[4] == fvc_protocol.data_types.TYPE_PROGRAM_UPDATE_FINISHED:
+            print("Update finished for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
+            return
+    
+    print("Update failed for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
 
 def parseDataProcess(uartQueueRx: Queue, uartQueueTx: Queue, updateQueueDictRx: dict, updateQueueDictTx: dict, endEvent: Event, cliQueueRx: Queue, cliQueueTx: Queue):
     boards_id = updateQueueDictRx.keys()
@@ -106,7 +110,7 @@ def parseDataProcess(uartQueueRx: Queue, uartQueueTx: Queue, updateQueueDictRx: 
                 if str(packet[2]) in boards_id and packet[4] != fvc_protocol.data_types.TYPE_CLI_DATA:
                     updateQueueDictRx[str(packet[2])].put(data)
                 elif packet[4] == fvc_protocol.data_types.TYPE_CLI_DATA:
-                    print("[Debug] (", packet[2], "->", packet[3] ,")",packet[4:-1])
+                    print("[Debug] (", packet[2], "->", packet[3] ,")",packet[5:-1])
                 else:
                     print("Unhandled data (", packet[2], "->", packet[3] ,")",packet[4:-1])
                 

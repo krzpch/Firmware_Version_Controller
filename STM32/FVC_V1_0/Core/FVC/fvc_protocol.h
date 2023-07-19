@@ -16,11 +16,13 @@ enum payload_type
 {
 	TYPE_NACK = 0,
 	TYPE_ACK,
+	TYPE_FATAL_ERROR,
 	TYPE_ID_REQ,
 	TYPE_ID_RESP,
 	TYPE_CLI_DATA,
 	TYPE_PROGRAM_UPDATE_REQUEST,
 	TYPE_PROGRAM_DATA,
+	TYPE_PROGRAM_UPDATE_FINISHED,
 	TYPE_EEPROM_DATA_READ,
 	TYPE_EEPROM_DATA_WRITE,
 
@@ -42,6 +44,6 @@ size_t frame_serialize (struct protocol_frame * structure, uint8_t * packet, siz
 bool frame_deserialize (struct protocol_frame * structure, uint8_t * packet, size_t max_packet_len);
 
 bool debug_transmit(const char* format, ...);
-bool send_response(bool response);
+bool send_response(enum payload_type response);
 
 #endif

@@ -103,7 +103,7 @@ bool debug_transmit(const char* format, ...)
 	return status;
 }
 
-bool send_response(bool response)
+bool send_response(enum payload_type response)
 {
 	bool status = false;
 	uint8_t serialized_packet[MAX_CLI_MSG + PACKET_CONST_LEN] = {0};
@@ -111,7 +111,7 @@ bool send_response(bool response)
 			.source_id = ctx.board_id,
 			.destination_id = 0,
 	};
-	frame.data_type = response ? TYPE_ACK : TYPE_NACK;
+	frame.data_type = response;
 
 	size_t len = frame_serialize(&frame,(uint8_t *) serialized_packet, MAX_CLI_MSG + PACKET_CONST_LEN);
 	if (len > 0) {
