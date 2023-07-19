@@ -11,7 +11,7 @@ from fvc_hash import hmac_calc
 from usart_process import SerialProcess
 
 _port = "COM6"
-_baudrate = 115200
+_baudrate = 921600
 
 _default_timeout_value_ns = 20*pow(10,9) # 20 s
 _timeout_for_end_of_update = 120*pow(10,9) # 20 s
@@ -103,14 +103,14 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
 
 def parseDataProcess(uartQueueRx: Queue, uartQueueTx: Queue, updateQueueDictRx: dict, updateQueueDictTx: dict, endEvent: Event, cliQueueRx: Queue, cliQueueTx: Queue):
     boards_id = updateQueueDictRx.keys()
-    
+
     while not endEvent.is_set():
         if not uartQueueRx.empty():
             data = uartQueueRx.get()
             packet = fvc_protocol.deserialzie_packet(data)
             if packet != None:
-                if str(packet[2]) in boards_id and packet[4] != fvc_protocol.data_types.TYPE_CLI_DATA:
-                    updateQueueDictRx[str(packet[2])].put(data)
+                if int(packet[2]) in boards_id and packet[4] != fvc_protocol.data_types.TYPE_CLI_DATA:
+                    updateQueueDictRx[int(packet[2])].put(data)
                 elif packet[4] == fvc_protocol.data_types.TYPE_CLI_DATA:
                     print("[Debug] (", packet[2], "->", packet[3] ,")",packet[5:-1])
                 else:
@@ -182,16 +182,16 @@ def main(paralelUpdateEn: bool):
         lines = boards.readlines()
         for line in lines:
             if int(line) > 0:
-                boards_to_update.append(line)
+                boards_to_update.append(int(line))
             else:
                 print("Cannot add ID: 0")
     
     program_path = input_args[1]
     
     for id in boards_to_update:
-        txQueuesDict[id] = managerHandle.Queue(100)
-        rxQueuesDict[id] = managerHandle.Queue(100)
-        updateEndEventDict[id] = managerHandle.Event()
+        txQueuesDict[int(id)] = managerHandle.Queue(100)
+        rxQueuesDict[int(id)] = managerHandle.Queue(100)
+        updateEndEventDict[int(id)] = managerHandle.Event()
     
     # serila port process
     serialPortRxQueue = managerHandle.Queue(100)

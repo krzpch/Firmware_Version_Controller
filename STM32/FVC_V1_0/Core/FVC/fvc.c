@@ -375,6 +375,7 @@ static void _handle_update_program_request(struct protocol_frame *frame)
 	if (memcmp(calc_program_hmac_sha256, program_hmac_sha256, 32) != 0) 
 	{
 		debug_transmit("Received program HMAC-SHA256 is incorrect!\n\r");
+		send_response(TYPE_FATAL_ERROR);
 		return;
 	}
 #endif
