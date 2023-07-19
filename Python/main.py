@@ -13,7 +13,8 @@ from usart_process import SerialProcess
 _port = "COM6"
 _baudrate = 115200
 
-_timeout_value_ns = 240*pow(10,9) # 120 s
+_default_timeout_value_ns = 20*pow(10,9) # 20 s
+_timeout_for_end_of_update = 120*pow(10,9) # 20 s
 _max_retransfers = 5
 
 _hmac_key = b'secret_key'
@@ -27,8 +28,8 @@ def calc_packet_quantity(data_size):
         data_size = data_size - max_data_size
     return packet_quantity
 
-def parseData(rxQueue: Queue, endEvent: Event):
-    timeout = time.time_ns() + _timeout_value_ns
+def parseData(rxQueue: Queue, endEvent: Event, timeout = _default_timeout_value_ns):
+    timeout = time.time_ns() + timeout
     
     while (timeout > time.time_ns()) and not endEvent.is_set():
         if not rxQueue.empty():
@@ -92,7 +93,8 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                         endEvent.set()
     
     if update_status:
-        data = parseData(rxQueueu, endEvent)
+        endEvent.clear()
+        data = parseData(rxQueueu, endEvent, timeout=_timeout_for_end_of_update)
         if data != None and data[4] == fvc_protocol.data_types.TYPE_PROGRAM_UPDATE_FINISHED:
             print("Update finished for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
             return
