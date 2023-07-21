@@ -10,6 +10,7 @@
  */
 
 #include "fvc_supervisor.h"
+#include "bsp.h"
 #include "stdlib.h"
 
 /*
@@ -108,6 +109,7 @@ static bool receive_check_variable(supervisor_t* sup, uint8_t var_nb)
 
 void supervisor_init(supervisor_t* sup, transmit_t transmit, receive_t receive, timer_start_refresh_t timer_start_refresh, reset_t reset)
 {   
+    bsp_supervisor_init();
     sup->state = supervisor_state_uninitialized;
     sup->transmit = transmit; 
     sup->receive = receive;

@@ -5,6 +5,7 @@
 #include "fvc_hash.h"
 #include "fvc_backup_management.h"
 #include "fvc_led.h"
+#include "fvc_supervisor.h"
 
 #include "STM32_SPI_Bootloader/stm32_spi_bootloader.h"
 #include "W25Q_Driver/Library/w25q_mem.h"
@@ -27,6 +28,14 @@ enum board_status
 	STATUS_TOP
 };
 
+enum current_working_mode
+{
+	MODE_UPDATER = 0,
+	MODE_SUPERVISOR = 1,
+
+	MODE_TOP
+};
+
 #define ERASED_MEMORY_VALUE		0xFF
 
 #define CLI_BUFFOR_LEN			256
@@ -43,6 +52,9 @@ static uint8_t hmac_sha256_key[] = {0x73, 0x65, 0x63, 0x72, 0x65, 0x74, 0x5f, 0x
 
 struct fvc_ctx
 {
+	supervisor_t sup;
+	enum current_working_mode curr_mode;
+
 	// values read from EEPROM
 	uint32_t config;
 	uint8_t board_id;
@@ -58,6 +70,8 @@ static struct fvc_ctx ctx = {
 		.board_id = 0xff,
 		.firmware_version = 0x00,
 		.config = 0x00000000,
+
+		.curr_mode = MODE_UPDATER,
 };
 
 // ------------------------------------------------
@@ -69,10 +83,10 @@ static void _process_msg(void);
 static void _get_board_info(void);
 static bool _is_app_present_and_valid(void);
 static bool _default_board_init(void);
+static void _reset_board(void);
 
 // command handlers
 static void _handle_update_program_request(struct protocol_frame *frame);
-
 
 static void _interface_callback_handler(size_t len)
 {
@@ -87,6 +101,11 @@ static void _interface_callback_handler(size_t len)
 	}
 
 	bsp_interface_receive_IT((uint8_t *)data_buffor, CLI_BUFFOR_LEN);
+}
+
+static void _timer_elapsed_callback_handler()
+{
+	supervisor_timer_period_elapsed_callback(&ctx.sup);
 }
 
 static void _execute_frame_response(struct protocol_frame *frame)
@@ -284,6 +303,8 @@ static void _decode_header_data(uint8_t *frame_payload ,uint32_t *new_firmware_i
 #if CFG_BUFFORING_MODE
 static void _handle_update_program_request(struct protocol_frame *frame)
 {
+	ctx.curr_mode = MODE_UPDATER;
+
 	debug_transmit("Updating board\n\r");
 	bool update_status = false;
 	uint32_t memory_addr = 0;
@@ -388,6 +409,9 @@ finish:
 
 	if (update_status)
 	{
+		ctx.curr_mode = MODE_UPDATER;
+		bsp_updater_init();
+
 		if (!_copy_program_from_flash_to_memory())
 		{
 			debug_transmit("Failed to save new program!\n\r");
@@ -406,6 +430,8 @@ finish:
 
 		send_response(TYPE_PROGRAM_UPDATE_FINISHED);
 
+		ctx.curr_mode = MODE_SUPERVISOR;
+		supervisor_init(&ctx.sup, &bsp_spi_transmit, &bsp_spi_receive, &bsp_timer_start_refresh, &_reset_board);
 	}
 	else
 	{
@@ -669,18 +695,32 @@ static void _handle_invalid_program(void)
 {
 	if(ctx.status == STATUS_PROGRAM_INVALID && validate_current_backup(false))
 	{
+		ctx.curr_mode = MODE_UPDATER;
+		bsp_timer_stop();
+		bsp_updater_init();
+
 		debug_transmit("Current firmware invalid. Restoring program from backup.\n\r");
 		if (_copy_program_from_flash_to_memory())
 		{
 			jmp_to_app(APP_ADDR);
 			ctx.status = STATUS_OK;
 			debug_transmit("Firmware restored.\n\r");
+		
+			ctx.curr_mode = MODE_SUPERVISOR;
+			supervisor_init(&ctx.sup, &bsp_spi_transmit, &bsp_spi_receive, &bsp_timer_start_refresh, &_reset_board);
 		}
 		else
 		{
 			debug_transmit("Failed to restore firmware.\n\r");
 		}
 	}
+}
+
+static void _reset_board(void)
+{
+    bsp_reset_gpio_controll(GPIO_RESET);
+    HAL_Delay(10);
+    bsp_reset_gpio_controll(GPIO_SET);
 }
 
 // ------------------------------------------------
@@ -692,10 +732,10 @@ bool fvc_main(void)
 	fvc_led_program_init();
 
 	bsp_interface_init(_interface_callback_handler);
+	bsp_timer_init(_timer_elapsed_callback_handler);
 
 	if (!fvc_eeprom_initialize())
 	{
-		// TODO: write eeprom failure handler
 		return false;
 	}
 
@@ -721,6 +761,11 @@ bool fvc_main(void)
 	if (!_default_board_init())
 	{
 		debug_transmit("WARNING: program could not be started\n\r");
+	} 
+	else
+	{
+		ctx.curr_mode = MODE_SUPERVISOR;
+		supervisor_init(&ctx.sup, &bsp_spi_transmit, &bsp_spi_receive, &bsp_timer_start_refresh, &_reset_board);
 	}
 
 	debug_transmit("Started CLI\n\r");
@@ -728,6 +773,11 @@ bool fvc_main(void)
 	{
 		_handle_invalid_program();
 		_process_msg();
+
+		if (ctx.curr_mode == MODE_SUPERVISOR)
+		{
+			supervisor_loop(&ctx.sup);
+		}
 
 		fvc_led_cli_blink();
 	}

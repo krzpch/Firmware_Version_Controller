@@ -4,6 +4,11 @@
 #include "gpio.h"
 #include "usart.h"
 #include "spi.h"
+#include "tim.h"
+
+#include "stm32g491xx.h"
+#include "stm32g4xx_hal_spi.h"
+#include "stm32g4xx_hal_tim.h"
 
 // ---------------------------------------------------------------------------------
 // comon support functions
@@ -25,7 +30,6 @@ bool bsp_initi_gpio(void)
 
 bool bsp_boot0_gpio_controll(enum gpio_state state)
 {
-
 	HAL_GPIO_WritePin(PROC_BOOT0_GPIO_Port, PROC_BOOT0_Pin, (GPIO_PinState) state);
 	return true;
 }
@@ -45,20 +49,129 @@ bool bsp_led_gpio_controll(enum gpio_state state)
 // ---------------------------------------------------------------------------------
 // bootloader support functions
 
-#define BOOTLOADER_SPI_PTR 	&hspi2
+#define BOOTLOADER_SUPERVISOR_SPI_PTR 	&hspi2
 
 bool bsp_bootloader_transmit(uint8_t * data, size_t data_len)
 {
 	bool status = false;
-	status = HAL_SPI_Transmit(BOOTLOADER_SPI_PTR, data, data_len, 100) == HAL_OK;
+	status = HAL_SPI_Transmit(BOOTLOADER_SUPERVISOR_SPI_PTR, data, data_len, 100) == HAL_OK;
 	return status;
 }
 
 bool bsp_bootloader_receive(uint8_t * data, size_t max_data_len)
 {
 	bool status = false;
-	status = HAL_SPI_Receive(BOOTLOADER_SPI_PTR, data, max_data_len, 500) == HAL_OK;
+	status = HAL_SPI_Receive(BOOTLOADER_SUPERVISOR_SPI_PTR, data, max_data_len, 500) == HAL_OK;
 	return status;
+}
+
+// ----------------------------------------------------------------------------------
+// SPI supervisor & TIMER interface
+
+static void (*timer_handler_ptr)(void) = NULL;
+
+static void timer_handler_func(struct __UART_HandleTypeDef * ptr, short unsigned int len)
+{
+	timer_handler_ptr();
+}
+
+void bsp_timer_init(void (*handler)())
+{
+	timer_handler_ptr = handler;
+	HAL_StatusTypeDef status = HAL_TIM_RegisterCallback(&htim1, HAL_TIM_PERIOD_ELAPSED_CB_ID, timer_handler_func);
+	if (status == HAL_OK)
+	{
+		handler(0);
+	}
+}
+
+bool bsp_spi_transmit(uint8_t *data, uint16_t len, uint32_t timeout)
+{
+    if(HAL_SPI_Transmit(BOOTLOADER_SUPERVISOR_SPI_PTR, data, len, timeout) != HAL_OK)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+bool bsp_spi_receive(uint8_t *data, uint16_t len, uint32_t timeout)
+{
+    if(HAL_SPI_Receive(BOOTLOADER_SUPERVISOR_SPI_PTR, data, len, timeout) != HAL_OK)
+    {
+        return false;
+    }
+    else
+    {
+        return true;
+    }
+}
+
+void bsp_timer_start_refresh(uint32_t period)
+{
+    HAL_TIM_Base_Start_IT(&htim1);
+    if(period > 65535)
+    {
+        __HAL_TIM_SET_COUNTER(&htim1, 65535);
+    }
+    else
+    {
+        __HAL_TIM_SET_COUNTER(&htim1, period);
+    }
+}
+
+bool bsp_timer_stop(void)
+{
+	return HAL_TIM_Base_Stop(&htim1) == HAL_OK;
+}
+
+void bsp_updater_init(void)
+{
+	HAL_SPI_DeInit(&hspi2);
+
+	hspi2.Instance = SPI2;
+	hspi2.Init.Mode = SPI_MODE_MASTER;
+	hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+	hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+	hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+	hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+	hspi2.Init.NSS = SPI_NSS_HARD_OUTPUT;
+	hspi2.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_64;
+	hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+	hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+	hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+	hspi2.Init.CRCPolynomial = 7;
+	hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+	hspi2.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+	if (HAL_SPI_Init(&hspi2) != HAL_OK)
+	{
+		Error_Handler();
+	}
+}
+
+void bsp_supervisor_init(void)
+{
+	HAL_SPI_DeInit(&hspi2);
+
+	hspi2.Instance = SPI2;
+	hspi2.Init.Mode = SPI_MODE_SLAVE;
+	hspi2.Init.Direction = SPI_DIRECTION_2LINES;
+	hspi2.Init.DataSize = SPI_DATASIZE_8BIT;
+	hspi2.Init.CLKPolarity = SPI_POLARITY_LOW;
+	hspi2.Init.CLKPhase = SPI_PHASE_1EDGE;
+	hspi2.Init.NSS = SPI_NSS_HARD_INPUT;
+	hspi2.Init.FirstBit = SPI_FIRSTBIT_MSB;
+	hspi2.Init.TIMode = SPI_TIMODE_DISABLE;
+	hspi2.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+	hspi2.Init.CRCPolynomial = 7;
+	hspi2.Init.CRCLength = SPI_CRC_LENGTH_DATASIZE;
+	hspi2.Init.NSSPMode = SPI_NSS_PULSE_DISABLE;
+	if (HAL_SPI_Init(&hspi2) != HAL_OK)
+	{
+		Error_Handler();
+	}
 }
 
 // ----------------------------------------------------------------------------------

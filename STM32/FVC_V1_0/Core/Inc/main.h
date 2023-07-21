@@ -57,14 +57,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define P_GOOD_Pin GPIO_PIN_0
-#define P_GOOD_GPIO_Port GPIOC
 #define LED_Pin GPIO_PIN_1
 #define LED_GPIO_Port GPIOC
-#define BTN1_Pin GPIO_PIN_2
-#define BTN1_GPIO_Port GPIOC
-#define BTN2_Pin GPIO_PIN_3
-#define BTN2_GPIO_Port GPIOC
 #define PWR_INT_Pin GPIO_PIN_6
 #define PWR_INT_GPIO_Port GPIOC
 #define PROC_BOOT0_Pin GPIO_PIN_7

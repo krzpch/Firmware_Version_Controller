@@ -28,6 +28,16 @@ bool bsp_interface_receive(uint8_t* data, size_t data_len);
 bool bsp_interface_receive_IT(uint8_t* data, size_t data_len);
 bool bsp_interface_abort_receive_IT(void);
 
+void bsp_timer_init(void (*handler)());
+
+bool bsp_spi_transmit(uint8_t *data, uint16_t len, uint32_t timeout);
+bool bsp_spi_receive(uint8_t *data, uint16_t len, uint32_t timeout);
+void bsp_timer_start_refresh(uint32_t period);
+bool bsp_timer_stop(void);
+
+void bsp_updater_init(void);
+void bsp_supervisor_init(void);
+
 bool bsp_debug_interface_transmit(uint8_t* data, size_t data_len);
 
 #endif
