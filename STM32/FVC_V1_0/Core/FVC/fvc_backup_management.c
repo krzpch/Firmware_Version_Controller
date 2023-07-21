@@ -16,7 +16,6 @@ bool create_firmware_backup(void)
 {
 	uint32_t prog_len, prog_hash;
 	uint8_t prog_data[256] = {0};
-	uint8_t temp[256] = {0};
 
 	if (!fvc_eeprom_read(EEPROM_PROGRAM_LEN, &prog_len) || !fvc_eeprom_read(EEPROM_PROGRAM_HASH, &prog_hash))
 	{
@@ -51,12 +50,6 @@ bool create_firmware_backup(void)
 		{
 			if (W25Q_ProgramRaw(prog_data, 256, ext_flash_addr) == W25Q_OK)
 			{
-				// Temp
-				if (W25Q_ReadRaw(temp, 256, ext_flash_addr) == W25Q_OK)
-				{
-					__NOP();
-				}
-				// Temp
 				current_addr += read_len;
 				ext_flash_addr += read_len;
 			}
@@ -74,7 +67,7 @@ bool create_firmware_backup(void)
 	return true;
 }
 
-bool validate_current_backup(void)
+bool validate_current_backup(bool compare_with_current_program)
 {
 	uint32_t prog_len, prog_hash;
 	uint32_t current_prog_len, current_prog_hash;
@@ -90,9 +83,12 @@ bool validate_current_backup(void)
 		return false;
 	}
 
-	if ((prog_len != current_prog_len) || (prog_hash != current_prog_hash))
+	if (compare_with_current_program)
 	{
-		return false;
+		if ((prog_len != current_prog_len) || (prog_hash != current_prog_hash))
+		{
+			return false;
+		}
 	}
 
 	uint32_t calc_hash = 0xFFFFFFFF;

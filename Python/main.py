@@ -11,9 +11,10 @@ from fvc_hash import hmac_calc
 from usart_process import SerialProcess
 
 _port = "COM6"
-_baudrate = 115200
+_baudrate = 921600
 
-_timeout_value_ns = 240*pow(10,9) # 120 s
+_default_timeout_value_ns = 20*pow(10,9) # 20 s
+_timeout_for_end_of_update = 120*pow(10,9) # 20 s
 _max_retransfers = 5
 
 _hmac_key = b'secret_key'
@@ -27,8 +28,8 @@ def calc_packet_quantity(data_size):
         data_size = data_size - max_data_size
     return packet_quantity
 
-def parseData(rxQueue: Queue, endEvent: Event):
-    timeout = time.time_ns() + _timeout_value_ns
+def parseData(rxQueue: Queue, endEvent: Event, timeout = _default_timeout_value_ns):
+    timeout = time.time_ns() + timeout
     
     while (timeout > time.time_ns()) and not endEvent.is_set():
         if not rxQueue.empty():
@@ -72,6 +73,7 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                         program_packet = fvc_protocol.serialize_packet(fvc_protocol.data_types.TYPE_PROGRAM_DATA, int(boardID), program_data)
                         state = 2
                     else: # finish update if there is no more data to be send
+                        print("All packets have been transmitted for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
                         update_status = True
                         endEvent.set()
 
@@ -89,24 +91,28 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                             endEvent.set()
                     else:
                         endEvent.set()
-            
+    
     if update_status:
-        print("Update finished for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
-    else:
-        print("Update failed for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
+        endEvent.clear()
+        data = parseData(rxQueueu, endEvent, timeout=_timeout_for_end_of_update)
+        if data != None and data[4] == fvc_protocol.data_types.TYPE_PROGRAM_UPDATE_FINISHED:
+            print("Update finished for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
+            return
+    
+    print("Update failed for board with ID:", boardID," (Took:", (time.time_ns() - timer_start)/1000000 ,"ms)")
 
 def parseDataProcess(uartQueueRx: Queue, uartQueueTx: Queue, updateQueueDictRx: dict, updateQueueDictTx: dict, endEvent: Event, cliQueueRx: Queue, cliQueueTx: Queue):
     boards_id = updateQueueDictRx.keys()
-    
+
     while not endEvent.is_set():
         if not uartQueueRx.empty():
             data = uartQueueRx.get()
             packet = fvc_protocol.deserialzie_packet(data)
             if packet != None:
-                if str(packet[2]) in boards_id and packet[4] != fvc_protocol.data_types.TYPE_CLI_DATA:
-                    updateQueueDictRx[str(packet[2])].put(data)
+                if int(packet[2]) in boards_id and packet[4] != fvc_protocol.data_types.TYPE_CLI_DATA:
+                    updateQueueDictRx[int(packet[2])].put(data)
                 elif packet[4] == fvc_protocol.data_types.TYPE_CLI_DATA:
-                    print("[Debug] (", packet[2], "->", packet[3] ,")",packet[4:-1])
+                    print("[Debug] (", packet[2], "->", packet[3] ,")",packet[5:-1])
                 else:
                     print("Unhandled data (", packet[2], "->", packet[3] ,")",packet[4:-1])
                 
@@ -176,16 +182,16 @@ def main(paralelUpdateEn: bool):
         lines = boards.readlines()
         for line in lines:
             if int(line) > 0:
-                boards_to_update.append(line)
+                boards_to_update.append(int(line))
             else:
                 print("Cannot add ID: 0")
     
     program_path = input_args[1]
     
     for id in boards_to_update:
-        txQueuesDict[id] = managerHandle.Queue(100)
-        rxQueuesDict[id] = managerHandle.Queue(100)
-        updateEndEventDict[id] = managerHandle.Event()
+        txQueuesDict[int(id)] = managerHandle.Queue(100)
+        rxQueuesDict[int(id)] = managerHandle.Queue(100)
+        updateEndEventDict[int(id)] = managerHandle.Event()
     
     # serila port process
     serialPortRxQueue = managerHandle.Queue(100)
