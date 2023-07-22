@@ -779,7 +779,7 @@ bool fvc_main(void)
 			supervisor_loop(&ctx.sup);
 		}
 
-		fvc_led_cli_blink();
+		//fvc_led_cli_blink();
 	}
 
 	return true;

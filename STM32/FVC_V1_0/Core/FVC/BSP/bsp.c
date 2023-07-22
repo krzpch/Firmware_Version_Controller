@@ -124,7 +124,7 @@ void bsp_timer_start_refresh(uint32_t period)
 
 bool bsp_timer_stop(void)
 {
-	return HAL_TIM_Base_Stop(&htim1) == HAL_OK;
+	return HAL_TIM_Base_Stop_IT(&htim1) == HAL_OK;
 }
 
 void bsp_updater_init(void)
