@@ -40,10 +40,48 @@ bool bsp_reset_gpio_controll(enum gpio_state state)
 	return true;
 }
 
+// ---------------------------------------------------------------------------------
+// LED support functions
+
+#define BOOTLOADER_LED_PTR 	&htim2
+
 bool bsp_led_gpio_controll(enum gpio_state state)
 {
 	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, (GPIO_PinState) state);
 	return true;
+}
+
+static void (*led_handler_ptr)(void) = NULL;
+
+static void led_handler_func(TIM_HandleTypeDef *htim)
+{
+	if (htim == BOOTLOADER_LED_PTR)
+	{
+		led_handler_ptr();
+	}
+}
+
+void bsp_led_timer_init(void (*handler)())
+{
+	led_handler_ptr = handler;
+	HAL_TIM_RegisterCallback(BOOTLOADER_LED_PTR, HAL_TIM_PERIOD_ELAPSED_CB_ID, led_handler_func);
+}
+
+void bsp_led_timer_set_countdown(size_t value)
+{
+	HAL_TIM_Base_Stop(BOOTLOADER_LED_PTR);
+	__HAL_TIM_SET_COUNTER(BOOTLOADER_LED_PTR, value);
+	HAL_TIM_Base_Start(BOOTLOADER_LED_PTR);
+}
+
+void bsp_led_timer_start(void)
+{
+	HAL_TIM_Base_Start_IT(BOOTLOADER_LED_PTR);
+}
+
+void bsp_led_timer_stop(void)
+{
+	HAL_TIM_Base_Stop_IT(BOOTLOADER_LED_PTR);
 }
 
 // ---------------------------------------------------------------------------------
@@ -66,23 +104,24 @@ bool bsp_bootloader_receive(uint8_t * data, size_t max_data_len)
 }
 
 // ----------------------------------------------------------------------------------
-// SPI supervisor & TIMER interface
+// Supervisor interface
+
+#define BOOTLOADER_SUPERVISOR_TIMER_PTR 	&htim1
 
 static void (*timer_handler_ptr)(void) = NULL;
 
-static void timer_handler_func(struct __UART_HandleTypeDef * ptr, short unsigned int len)
+static void timer_handler_func(TIM_HandleTypeDef *htim)
 {
-	timer_handler_ptr();
+	if (htim == BOOTLOADER_SUPERVISOR_TIMER_PTR)
+	{
+		timer_handler_ptr();
+	}
 }
 
 void bsp_timer_init(void (*handler)())
 {
 	timer_handler_ptr = handler;
-	HAL_StatusTypeDef status = HAL_TIM_RegisterCallback(&htim1, HAL_TIM_PERIOD_ELAPSED_CB_ID, timer_handler_func);
-	if (status == HAL_OK)
-	{
-		handler(0);
-	}
+	HAL_TIM_RegisterCallback(BOOTLOADER_SUPERVISOR_TIMER_PTR, HAL_TIM_PERIOD_ELAPSED_CB_ID, timer_handler_func);
 }
 
 bool bsp_spi_transmit(uint8_t *data, uint16_t len, uint32_t timeout)
@@ -111,20 +150,20 @@ bool bsp_spi_receive(uint8_t *data, uint16_t len, uint32_t timeout)
 
 void bsp_timer_start_refresh(uint32_t period)
 {
-    HAL_TIM_Base_Start_IT(&htim1);
+    HAL_TIM_Base_Start_IT(BOOTLOADER_SUPERVISOR_TIMER_PTR);
     if(period > 65535)
     {
-        __HAL_TIM_SET_COUNTER(&htim1, 65535);
+        __HAL_TIM_SET_COUNTER(BOOTLOADER_SUPERVISOR_TIMER_PTR, 65535);
     }
     else
     {
-        __HAL_TIM_SET_COUNTER(&htim1, period);
+        __HAL_TIM_SET_COUNTER(BOOTLOADER_SUPERVISOR_TIMER_PTR, period);
     }
 }
 
 bool bsp_timer_stop(void)
 {
-	return HAL_TIM_Base_Stop_IT(&htim1) == HAL_OK;
+	return HAL_TIM_Base_Stop_IT(BOOTLOADER_SUPERVISOR_TIMER_PTR) == HAL_OK;
 }
 
 void bsp_updater_init(void)
