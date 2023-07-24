@@ -66,7 +66,7 @@ def boardUpdateProcess(boardID: int, programPath: str, txQueue: Queue, rxQueueu:
                     else:
                         endEvent.set()
                         
-                case 1: # Prepare packet 
+                case 1: # Prepare packet
                     retransfers_counter = 0
                     program_data = file.read(max_data_size)
                     if len(program_data) > 0:
