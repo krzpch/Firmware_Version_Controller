@@ -17,7 +17,12 @@ void bsp_delay_ms(uint32_t time_ms);
 bool bsp_initi_gpio(void);
 bool bsp_boot0_gpio_controll(enum gpio_state state);
 bool bsp_reset_gpio_controll(enum gpio_state state);
+
+void bsp_led_timer_init(void (*handler)());
+void bsp_led_timer_set_countdown(size_t value);
 bool bsp_led_gpio_controll(enum gpio_state state);
+void bsp_led_timer_start(void);
+void bsp_led_timer_stop(void);
 
 bool bsp_bootloader_transmit(uint8_t * data, size_t data_len);
 bool bsp_bootloader_receive(uint8_t * data, size_t max_data_len);

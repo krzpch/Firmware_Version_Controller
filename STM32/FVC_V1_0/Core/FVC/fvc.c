@@ -110,6 +110,8 @@ static void _timer_elapsed_callback_handler()
 
 static void _execute_frame_response(struct protocol_frame *frame)
 {
+	fvc_led_cli_blink(false);
+
 	switch (frame->data_type) {
 		case TYPE_ID_REQ:
 		case TYPE_ID_RESP:
@@ -125,6 +127,8 @@ static void _execute_frame_response(struct protocol_frame *frame)
 		default:
 			break;
 	}
+	
+	fvc_led_cli_blink(true);
 }
 
 static void _get_board_info(void)
@@ -729,7 +733,7 @@ static void _reset_board(void)
 bool fvc_main(void)
 {
 	bsp_initi_gpio();
-	fvc_led_program_init();
+	fvc_led_init();
 
 	bsp_interface_init(_interface_callback_handler);
 	bsp_timer_init(_timer_elapsed_callback_handler);
@@ -768,6 +772,7 @@ bool fvc_main(void)
 		supervisor_init(&ctx.sup, &bsp_spi_transmit, &bsp_spi_receive, &bsp_timer_start_refresh, &_reset_board);
 	}
 
+	fvc_led_cli_blink(true);
 	debug_transmit("Started CLI\n\r");
 	while(1)
 	{
