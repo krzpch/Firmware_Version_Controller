@@ -165,7 +165,11 @@ static bool _is_app_present_and_valid(void)
 	}
 
 #if CFG_CREATE_BACKUP_AT_START && !CFG_BUFFORING_MODE
-	W25Q_EraseChip();
+	bool backup_should_be_valid = validate_current_backup(true);
+	if (!backup_should_be_valid)
+	{
+		W25Q_EraseChip();
+	}
 #endif
 
 	calc_hash = 0xFFFFFFFF;
@@ -186,7 +190,10 @@ static bool _is_app_present_and_valid(void)
 		{
 
 #if CFG_CREATE_BACKUP_AT_START && !CFG_BUFFORING_MODE
-			W25Q_ProgramRaw(prog_data, 256, current_addr);
+			if (!backup_should_be_valid)
+			{
+				W25Q_ProgramRaw(prog_data, 256, current_addr);
+			}
 #endif
 
 			calc_hash = fvc_calc_crc(calc_hash, prog_data, read_len);
@@ -198,13 +205,20 @@ static bool _is_app_present_and_valid(void)
 	}
 
 #if CFG_CREATE_BACKUP_AT_START && !CFG_BUFFORING_MODE
-	if (calc_hash == program_hash)
+	if (!backup_should_be_valid)
 	{
-		fvc_eeprom_write(EEPROM_BACKUP_PROGRAM_LEN, program_len);
-		fvc_eeprom_write(EEPROM_BACKUP_PROGRAM_HASH, program_hash);
-		return true;
+		if (calc_hash == program_hash)
+		{
+			fvc_eeprom_write(EEPROM_BACKUP_PROGRAM_LEN, program_len);
+			fvc_eeprom_write(EEPROM_BACKUP_PROGRAM_HASH, program_hash);
+			return true;
+		}
+		return false;
 	}
-	return false;
+	else
+	{
+		return calc_hash == program_hash;
+	}
 #else
 	return calc_hash == program_hash;
 #endif
